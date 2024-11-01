@@ -4,6 +4,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 from flask import Flask
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from config.database import engine
 from models.SOP_tables import Base
 from services.wf_builder_service import WorkflowBuilderService
 from api.workflow_api import setup_workflow_api
@@ -11,7 +12,7 @@ from api.workflow_api import setup_workflow_api
 app = Flask(__name__)
 
 # Set up the database connection
-engine = create_engine('sqlite:///sop.db')
+# engine = create_engine('sqlite:///sop.db')
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 

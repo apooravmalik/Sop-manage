@@ -1,6 +1,7 @@
+# database.py
 import os
 import urllib
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 import logging
@@ -9,42 +10,62 @@ import logging
 load_dotenv()
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Database configuration using environment variables
+# Database configuration
 DB_CONFIG = {
-    'driver': os.getenv('DB_DRIVER'),
-    'server': os.getenv('DB_SERVER'),
-    'database': os.getenv('DB_DATABASE'),
-    'username': os.getenv('DB_USERNAME'),
-    'password': os.getenv('DB_PASSWORD'),
-    'trust_cert': os.getenv('DB_TRUST_CERT')
+    'driver': os.getenv('DB_DRIVER', 'ODBC Driver 17 for SQL Server'),
+    'server': os.getenv('DB_SERVER', 'APOORAV_MALIK'),
+    'database': os.getenv('DB_DATABASE', 'sop-manage'),
+    'username': os.getenv('DB_USERNAME', 'sa'),
+    'password': os.getenv('DB_PASSWORD', ''),
+    'trust_cert': os.getenv('DB_TRUST_CERT', 'yes'),
 }
 
+DB_SCHEMA = "dbo"
+
 def create_connection_string():
-    """Create a properly formatted connection string"""
-    conn_str = (
+    """Create a properly formatted connection string for MS SQL Server"""
+    params = urllib.parse.quote_plus(
         f"DRIVER={{{DB_CONFIG['driver']}}};"
         f"SERVER={DB_CONFIG['server']};"
         f"DATABASE={DB_CONFIG['database']};"
         f"UID={DB_CONFIG['username']};"
         f"PWD={DB_CONFIG['password']};"
-        f"TrustServerCertificate={DB_CONFIG['trust_cert']};"
-        "Encrypt=yes;"
-        "Connection Timeout=30"
+        f"TrustServerCertificate={'yes' if DB_CONFIG['trust_cert'].lower() == 'yes' else 'no'};"
     )
-    return urllib.parse.quote_plus(conn_str)
+    return f"mssql+pyodbc:///?odbc_connect={params}"
 
-# Create engine with proper configuration
+# Create engine
 engine = create_engine(
-    f"mssql+pyodbc:///?odbc_connect={create_connection_string()}",
-    echo=False,
+    create_connection_string(),
+    echo=True,  # Set to False in production
     pool_size=5,
     max_overflow=10,
     pool_timeout=30,
     pool_recycle=3600,
 )
+
+# Event listener to create schema if it doesn't exist
+@event.listens_for(engine, 'connect')
+def create_schema(dbapi_connection, connection_record):
+    try:
+        cursor = dbapi_connection.cursor()
+        cursor.execute(f"""
+            IF NOT EXISTS (
+                SELECT schema_name 
+                FROM information_schema.schemata 
+                WHERE schema_name = '{DB_SCHEMA}'
+            )
+            BEGIN
+                EXEC('CREATE SCHEMA {DB_SCHEMA}')
+            END
+        """)
+        cursor.close()
+        dbapi_connection.commit()
+    except Exception as e:
+        logger.error(f"Error creating schema: {e}")
 
 # Create session factory
 SessionLocal = sessionmaker(
@@ -54,7 +75,7 @@ SessionLocal = sessionmaker(
     expire_on_commit=False
 )
 
-def getdb():
+def get_db():
     """Database session dependency"""
     db = SessionLocal()
     try:
@@ -63,7 +84,7 @@ def getdb():
         db.close()
 
 def test_connection():
-    """Test database connection and return status"""
+    """Test database connection"""
     try:
         with engine.connect() as connection:
             logger.info("Successfully connected to the database!")
@@ -71,6 +92,3 @@ def test_connection():
     except Exception as e:
         logger.error(f"Error connecting to the database: {e}")
         return False
-
-if __name__ == "__main__":
-    test_connection()
