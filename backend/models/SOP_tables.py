@@ -1,9 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Enum as SQLEnum, Text
-from sqlalchemy.orm import relationship, validates
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, validates, declarative_base
 from datetime import datetime
 import enum
-
 
 Base = declarative_base()
 
@@ -33,6 +31,7 @@ class Question(Base):
     question_text = Column(String(1000), nullable=False)
     question_type = Column(SQLEnum(QuestionType))
     is_required = Column(Boolean, default=True)
+    next_question_id = Column(Integer, nullable=True)  # For Subjective
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
