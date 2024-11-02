@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from config.database import engine
 from models.SOP_tables import Base
-from services.wf_builder_service import WorkflowBuilderService
+from services.wf_builder_service import WorkflowBuilderService, QuestionManagementService
 from api.workflow_api import setup_workflow_api
 
 app = Flask(__name__)
@@ -19,8 +19,11 @@ Session = sessionmaker(bind=engine)
 # Set up the Workflow Builder Service
 wf_builder_service = WorkflowBuilderService(Session())
 
+# Set up the Question Management Service
+question_management_service = QuestionManagementService(Session())
+
 # Set up the Workflow API
-setup_workflow_api(app, wf_builder_service)
+setup_workflow_api(app, wf_builder_service, question_management_service)
 
 if __name__ == '__main__':
     app.run(debug=True)

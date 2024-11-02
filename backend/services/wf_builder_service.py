@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import List, Dict, Optional, Union
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import func
 from enum import Enum
 import logging
 
@@ -12,6 +13,49 @@ logger = logging.getLogger(__name__)
 # Append the backend path for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from backend.models.SOP_tables import Workflow, Question, Option, QuestionType
+
+class QuestionManagementService:
+    def __init__(self, db_session: Session):
+        self.db = db_session
+    
+    def get_last_question_id(self) -> int:
+        """Get the last used question ID from the database"""
+        last_question = self.db.query(func.max(Question.question_id)).scalar()
+        return last_question if last_question else 0
+    
+    def get_workflow_question_ids(self, workflow_id: int) -> List[Dict]:
+        """Get all questions with their IDs for a specific workflow"""
+        questions = self.db.query(Question).filter(
+            Question.workflow_id == workflow_id
+        ).order_by(Question.question_id).all()
+        
+        return [
+            {
+                "question_id": q.question_id,
+                "question_text": q.question_text,
+                "question_type": q.question_type.value
+            }
+            for q in questions
+        ]
+    
+    def get_all_workflow_questions(self) -> Dict[int, List[Dict]]:
+        """Get all workflows with their question IDs"""
+        workflows = self.db.query(Workflow).all()
+        result = {}
+        
+        for workflow in workflows:
+            result[workflow.workflow_id] = {
+                "workflow_name": workflow.workflow_name,
+                "questions": [
+                    {
+                        "question_id": q.question_id,
+                        "question_text": q.question_text,
+                        "question_type": q.question_type.value
+                    }
+                    for q in workflow.questions
+                ]
+            }
+        return result
 
 class WorkflowBuilderService:
     def __init__(self, db_session: Session):
