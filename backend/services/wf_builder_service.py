@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # Append the backend path for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-from backend.models.SOP_tables import Workflow, Question, Option, QuestionType
+from backend.models.SOP_tables import Workflow, Question, Option, QuestionType, Response, Answer
 
 class QuestionManagementService:
     def __init__(self, db_session: Session):
@@ -131,6 +131,37 @@ class WorkflowBuilderService:
 
         except Exception as e:
             logger.error(f"Error in create_workflow: {str(e)}")
+            self.db.rollback()
+            raise
+        
+        
+    def delete_workflow(self, workflow_id: int) -> bool:
+        try:
+            # First check if workflow exists
+            workflow = self.db.query(Workflow).filter(
+                Workflow.workflow_id == workflow_id
+            ).first()
+            
+            if not workflow:
+                logger.warning(f"Attempted to delete non-existent workflow with ID: {workflow_id}")
+                return False
+            
+            # Delete associated responses first to avoid FK constraint issues
+            self.db.query(Response).filter(
+                Response.workflow_id == workflow_id
+            ).delete(synchronize_session=False)
+            
+            # The workflow deletion will cascade to questions, which will cascade to:
+            # - options (via cascade="all, delete-orphan")
+            # - answers (via cascade="all, delete-orphan")
+            self.db.delete(workflow)
+            
+            self.db.commit()
+            logger.info(f"Successfully deleted workflow {workflow_id} and all associated data")
+            return True
+            
+        except SQLAlchemyError as e:
+            logger.error(f"Error deleting workflow {workflow_id}: {str(e)}")
             self.db.rollback()
             raise
 
