@@ -33,7 +33,7 @@ class QuestionManagementService:
             {
                 "question_id": q.question_id,
                 "question_text": q.question_text,
-                "question_type": q.question_type.value
+                "question_type": q.question_type
             }
             for q in questions
         ]
@@ -164,6 +164,68 @@ class WorkflowBuilderService:
             logger.error(f"Error deleting workflow {workflow_id}: {str(e)}")
             self.db.rollback()
             raise
+    
+    def update_workflow(self, workflow_id: int, workflow_data: Dict) -> Workflow:
+        try:
+            workflow = self.db.query(Workflow).filter(Workflow.workflow_id == workflow_id).first()
+            if not workflow:
+                raise ValueError(f"Workflow {workflow_id} not found")
+
+            # Update workflow-level fields
+            workflow.workflow_name = workflow_data["workflow_name"]
+            workflow.incident_type = workflow_data["incident_type"]
+
+            # Update questions
+            existing_questions = {q.question_id: q for q in workflow.questions}
+            new_questions = []
+            for question_data in workflow_data["questions"]:
+                question_id = question_data.get("question_id")
+                if question_id and question_id in existing_questions:
+                    # Update existing question
+                    question = existing_questions[question_id]
+                    question.question_text = question_data["question_text"]
+                    question.question_type = question_data["question_type"]
+                    question.is_required = question_data.get("is_required", True)
+                    question.is_completed = question_data.get("is_completed", False)
+                    question.next_question_id = question_data.get("next_question_id")
+                else:
+                    # Create new question
+                    question = self.add_question(
+                        workflow_id=workflow.workflow_id,
+                        question_text=question_data["question_text"],
+                        question_type=question_data["question_type"],
+                        is_required=question_data.get("is_required", True),
+                        is_completed=question_data.get("is_completed", False),
+                        next_question_id=question_data.get("next_question_id")
+                    )
+                    new_questions.append(question)
+
+            # Update options
+            for question in new_questions + list(existing_questions.values()):
+                existing_options = {o.option_id: o for o in question.options}
+                for option_data in question_data.get("options", []):
+                    option_id = option_data.get("option_id")
+                    if option_id and option_id in existing_options:
+                        # Update existing option
+                        option = existing_options[option_id]
+                        option.option_text = option_data["option_text"]
+                        option.next_question_id = option_data.get("next_question_id")
+                        option.is_completed = option_data.get("is_completed", False)
+                    else:
+                        # Create new option
+                        option = self.add_option(
+                            question_id=question.question_id,
+                            option_text=option_data["option_text"],
+                            next_question_id=option_data.get("next_question_id"),
+                            is_completed=option_data.get("is_completed", False)
+                        )
+
+            self.db.commit()
+            return workflow
+
+        except Exception as e:
+            self.db.rollback()
+            raise
 
     def add_question(
         self,
@@ -222,24 +284,26 @@ class WorkflowBuilderService:
         questions = []
         for question in workflow.questions:
             question_data = {
+                "question_id": question.question_id,
                 "question_text": question.question_text,
                 "question_type": question.question_type,
                 "is_required": question.is_required,
             }
 
             # Add next_question_id for subjective questions and instructions
-            if question.question_type in [QuestionType.SUBJECTIVE.value, QuestionType.INSTRUCTION.value]:
+            if question.question_type in [QuestionType.SUBJECTIVE, QuestionType.INSTRUCTION]:
                 question_data["next_question_id"] = question.next_question_id
             
             # Add is_completed only for instruction questions
-            if question.question_type == QuestionType.INSTRUCTION.value:
+            if question.question_type == QuestionType.INSTRUCTION:
                 question_data["is_completed"] = question.is_completed
 
             # Add options for multiple choice and checkbox questions
-            if question.question_type in [QuestionType.MULTIPLE_CHOICE.value, QuestionType.CHECKBOX.value]:
+            if question.question_type in [QuestionType.MULTIPLE_CHOICE, QuestionType.CHECKBOX]:
                 options = []
                 for option in question.options:
                     options.append({
+                        "option_id": option.option_id,
                         "option_text": option.option_text,
                         "next_question_id": option.next_question_id,
                         "is_completed": option.is_completed
