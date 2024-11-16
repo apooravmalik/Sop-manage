@@ -1,5 +1,5 @@
 import { ThemeProvider } from './components/ThemeContext';
-import WorkflowBuilder from './components/WorkflowBuilder';
+import WorkflowBuilder from './pages/WorkflowBuilder';
 
 const App = () => {
   return (

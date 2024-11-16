@@ -1,7 +1,9 @@
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 from flask import Flask
+from flask_cors import CORS
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from config.database import engine
@@ -10,6 +12,18 @@ from services.wf_builder_service import WorkflowBuilderService, QuestionManageme
 from api.workflow_api import setup_workflow_api
 
 app = Flask(__name__)
+
+# Configure CORS
+CORS(app, resources={
+    r"/*": {  # Allow all routes
+        "origins": [
+            "http://localhost:5173",  # Your frontend URL
+            "http://127.0.0.1:5173"   # Alternative localhost URL
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Set up the database connection
 # engine = create_engine('sqlite:///sop.db')

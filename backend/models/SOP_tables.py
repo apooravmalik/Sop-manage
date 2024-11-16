@@ -11,10 +11,10 @@ from backend.config.database import DB_SCHEMA
 Base = declarative_base()
 
 class QuestionType(str, enum.Enum):
-    MULTIPLE_CHOICE = "MultipleChoice"
-    CHECKBOX = "CheckBox"
-    SUBJECTIVE = "Subjective"
-    INSTRUCTION = "Instruction"
+    MULTIPLE_CHOICE = "MULTIPLE_CHOICE"
+    SUBJECTIVE = "SUBJECTIVE"
+    CHECKBOX = "CHECKBOX"
+    INSTRUCTION = "INSTRUCTION"
 
 class Workflow(Base):
     __tablename__ = "workflow"
