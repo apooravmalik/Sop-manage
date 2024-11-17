@@ -10,9 +10,10 @@ import {
   Save,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
+import { useTheme } from "../components/ThemeContext";
 
 const WorkflowBuilder = () => {
-  const [darkMode, setDarkMode] = useState(false);
+  const { darkMode, toggleDarkMode } = useTheme();
   const [workflowTitle, setWorkflowTitle] = useState("Workflow 1");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,8 +40,6 @@ const WorkflowBuilder = () => {
       completed: false,
     },
   ]);
-
-  const toggleDarkMode = () => setDarkMode(!darkMode);
 
   useEffect(() => {
     fetchLastQuestionId();
