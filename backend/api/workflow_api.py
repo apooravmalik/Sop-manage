@@ -72,5 +72,14 @@ def setup_workflow_api(app, wf_builder_service, question_management_service):
             return jsonify({"last_question_id": last_id})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+        
+    @workflow_api.route('/workflows/details', methods=['GET'])
+    def get_all_workflow_details():
+        """Fetch detailed information of all workflows."""
+        try:
+            all_workflows = wf_builder_service.get_all_workflow_details()
+            return jsonify(all_workflows), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     app.register_blueprint(workflow_api, url_prefix='/api')

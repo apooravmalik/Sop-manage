@@ -317,3 +317,20 @@ class WorkflowBuilderService:
             "incident_type": workflow.incident_type,
             "questions": questions
         }
+        
+    def get_all_workflow_details(self) -> List[Dict]:
+        """Fetch detailed information of all workflows."""
+        workflows = self.db.query(Workflow).all()
+
+        if not workflows:
+            return []
+
+        return [
+            {
+                "workflow_id": workflow.workflow_id,
+                "workflow_name": workflow.workflow_name,
+                "incident_type": workflow.incident_type,
+                "created_at": workflow.created_at.isoformat()
+            }
+            for workflow in workflows
+        ]
