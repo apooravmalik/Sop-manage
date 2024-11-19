@@ -38,7 +38,7 @@ class Question(Base):
     )
 
     question_id = Column(Integer, primary_key=True)
-    workflow_id = Column(Integer, ForeignKey(f"{DB_SCHEMA}.workflow.workflow_id", ondelete="CASCADE"))
+    workflow_id = Column(Integer, ForeignKey(f"{DB_SCHEMA}.workflow.workflow_id"))
     question_text = Column(String(1000), nullable=False)
     question_type = Column(String(20), nullable=False)
     is_required = Column(Boolean, default=True)
@@ -73,7 +73,8 @@ class Option(Base):
     option_id = Column(Integer, primary_key=True)
     question_id = Column(Integer, ForeignKey(f"{DB_SCHEMA}.question.question_id", ondelete="CASCADE"))
     option_text = Column(String(500), nullable=False)
-    next_question_id = Column(Integer, ForeignKey(f"{DB_SCHEMA}.question.question_id", ondelete="SET NULL"), nullable=True)
+    # Change the next_question_id foreign key to use ON DELETE NO ACTION
+    next_question_id = Column(Integer, ForeignKey(f"{DB_SCHEMA}.question.question_id", ondelete="NO ACTION"), nullable=True)
     is_completed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -88,13 +89,10 @@ class Response(Base):
 
     incident_number = Column(String(50), primary_key=True)
     workflow_id = Column(Integer, ForeignKey(f"{DB_SCHEMA}.workflow.workflow_id"))
-    question_id = Column(Integer, ForeignKey(f"{DB_SCHEMA}.question.question_id"))
-    answer_id = Column(Integer, ForeignKey(f"{DB_SCHEMA}.answer.answer_id"))
     created_at = Column(DateTime, default=datetime.utcnow)
+    
 
     workflow = relationship("Workflow", back_populates="responses")
-    question = relationship("Question", back_populates="responses")
-    answer = relationship("Answer", back_populates="responses")
 
 class Answer(Base):
     __tablename__ = "answer"

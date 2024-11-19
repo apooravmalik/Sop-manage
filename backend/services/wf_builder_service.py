@@ -56,6 +56,42 @@ class QuestionManagementService:
                 ]
             }
         return result
+    from sqlalchemy.exc import SQLAlchemyError
+
+class QuestionManagementService:
+    def __init__(self, db_session: Session):
+        self.db = db_session
+
+    def submit_answer(self, workflow_id: int, question_id: int, answer_text: str) -> 'Answer':
+        """Save the answer to a question and update the created_at field in the Response table."""
+        try:
+            # Save the answer
+            answer = Answer(
+                question_id=question_id,
+                answer_text=answer_text,
+                rendered_at=datetime.utcnow(),
+                submitted_at=datetime.utcnow()
+            )
+            self.db.add(answer)
+
+            # Update the `created_at` field in the Response table for the given workflow
+            response = self.db.query(Response).filter(Response.workflow_id == workflow_id).first()
+            if response:
+                response.created_at = datetime.utcnow()
+            
+            # Commit the transaction
+            self.db.commit()
+            return answer
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Error saving answer or updating response created_at: {str(e)}")
+            raise
+
+        
+    from datetime import datetime
+from sqlalchemy.exc import SQLAlchemyError
+
+
 
 class WorkflowBuilderService:
     def __init__(self, db_session: Session):

@@ -81,5 +81,38 @@ def setup_workflow_api(app, wf_builder_service, question_management_service):
             return jsonify(all_workflows), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+    @workflow_api.route('/workflows/<int:workflow_id>/questions', methods=['GET'])
+    def get_questions_for_workflow(workflow_id):
+        """Fetch questions for a specific workflow."""
+        try:
+            questions = question_management_service.get_workflow_question_ids(workflow_id)
+            return jsonify(questions), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @workflow_api.route('/answers', methods=['POST'])
+    def submit_answer():
+        """Submit answers for questions."""
+        try:
+            answer_data = request.get_json()
+            workflow_id = answer_data.get('workflow_id')
+            answers = answer_data.get('answers')
+
+            if not workflow_id or not answers:
+                return jsonify({"error": "workflow_id and answers are required"}), 400
+
+            for answer in answers:
+                question_id = answer['question_id']
+                answer_text = answer['answer_text']
+                answer_instance = question_management_service.submit_answer(
+                    workflow_id=workflow_id,
+                    question_id=question_id,
+                    answer_text=answer_text
+                )
+
+            return jsonify({"message": "Answers submitted successfully"}), 201
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+        
 
     app.register_blueprint(workflow_api, url_prefix='/api')

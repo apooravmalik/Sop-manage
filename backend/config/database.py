@@ -15,12 +15,12 @@ logger = logging.getLogger(__name__)
 
 # Database configuration
 DB_CONFIG = {
-    'driver': os.getenv('DB_DRIVER', 'ODBC Driver 17 for SQL Server'),
-    'server': os.getenv('DB_SERVER', 'APOORAV_MALIK'),
-    'database': os.getenv('DB_DATABASE', 'sop-manage'),
-    'username': os.getenv('DB_USERNAME', 'sa'),
-    'password': os.getenv('DB_PASSWORD', ''),
-    'trust_cert': os.getenv('DB_TRUST_CERT', 'yes'),
+    'driver': 'ODBC Driver 17 for SQL Server',
+    'server': 'DESKTOP-TE590M8',
+    'database': 'sop-manage',
+    'username': 'sa',
+    'password': 'm00se_1234',
+    'trust_cert': 'yes',
 }
 
 DB_SCHEMA = "dbo"
