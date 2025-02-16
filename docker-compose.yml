@@ -1,0 +1,43 @@
+
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: sop_db
+    ports:
+      - "1435:1433"
+    environment:
+      SA_PASSWORD: "M00se1980"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+
+  backend:
+    build: 
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: sop_backend
+    ports:
+      - "5002:5002"
+    environment:
+      DB_DRIVER: "ODBC Driver 17 for SQL Server"
+      DB_SERVER: "host.docker.internal"
+      DB_DATABASE: "sop-manage"
+      DB_DATABASE_VC: "TEST"
+      DB_USERNAME: "sa"
+      DB_PASSWORD: "M00se1980"
+      DB_TRUST_CERT: "yes"
+      ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
+      RUNNING_IN_DOCKER: "true"
+
+    depends_on:
+      - db
+
+  frontend:
+    build: 
+      context: .
+      dockerfile: Dockerfile.frontend  # Ensure this file exists
+    container_name: sop_frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
