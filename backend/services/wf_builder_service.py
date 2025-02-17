@@ -56,6 +56,35 @@ class QuestionManagementService:
                 ]
             }
         return result
+    
+    def is_last_question(self, question_id: int) -> bool:
+        """Check if the given question is the last question in its workflow."""
+        try:
+            # Fetch the question based on the provided question_id
+            question = self.db.query(Question).filter(Question.question_id == question_id).first()
+            if not question:
+                raise ValueError(f"Question with ID {question_id} not found.")
+
+            # Get the maximum question ID for the workflow associated with the question
+            max_question_id = self.db.query(func.max(Question.question_id)).filter(
+                Question.workflow_id == question.workflow_id
+            ).scalar()
+
+            # Return True if the current question ID is the maximum question ID
+            return question_id == max_question_id
+
+        except Exception as e:
+            logger.error(f"Error checking if question {question_id} is the last: {str(e)}")
+            raise
+        
+    def close_session(self):
+        """Safely close the database session if it exists."""
+        if self.db:
+            try:
+                self.db.close()
+            except Exception as e:
+                logger.error(f"Error closing database session: {str(e)}")
+
 
 class WorkflowBuilderService:
     def __init__(self, db_session: Session):
@@ -393,6 +422,14 @@ class WorkflowBuilderService:
         except Exception as e:
             logger.error(f"Error fetching questions and options for workflow_id {workflow_id}: {str(e)}")
             raise
+        
+    def close_session(self):
+        """Safely close the database session if it exists."""
+        if self.db:
+            try:
+                self.db.close()
+            except Exception as e:
+                logger.error(f"Error closing database session: {str(e)}")
 
         
 class AnswerService:
@@ -474,7 +511,7 @@ class AnswerService:
 
             # Construct the SQL query to update iinlActionTaken_MEM
             query = text("""
-            UPDATE [vtasdata_v116].[dbo].[IncidentLog_TBL]
+            UPDATE [TEST].[dbo].[IncidentLog_TBL]
             SET inlActionTaken_MEM = 
             ISNULL(CAST(inlActionTaken_MEM AS NVARCHAR(MAX)), '') + 
             CASE 
@@ -582,6 +619,14 @@ class AnswerService:
         except Exception as e:
             logger.error(f"Error fetching responses with questions: {str(e)}")
             raise
+        
+    def close_session(self):
+        """Safely close the database session if it exists."""
+        if self.db:
+            try:
+                self.db.close()
+            except Exception as e:
+                logger.error(f"Error closing database session: {str(e)}")
 
 class VC_DB_Service:
     def __init__(self, db_session: Session):

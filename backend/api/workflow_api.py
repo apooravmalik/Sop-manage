@@ -198,6 +198,20 @@ def setup_workflow_api(app, wf_builder_service, question_management_service, vc_
                 new_text=formatted_text,
                 workflow_name=workflow_name
             )
+            # Check if the current question is the last one
+            is_last_question = question_management_service.is_last_question(question_id)
+            if is_last_question:
+                # If it's the last question, close the connection and return a success message
+                answer_service.close_session()
+                wf_builder_service.close_session()
+                question_management_service.close_session()
+                print("Last question reached")
+                return jsonify({
+                    "message": "Answer saved successfully. This was the last question.",
+                    "question_id": question_id,
+                    "answer_text": answer_text,
+                    "timestamp_in_ist": formatted_ist_time
+                }), 200
 
             return jsonify({
                 "message": "Answer and Response saved successfully.",
@@ -206,6 +220,9 @@ def setup_workflow_api(app, wf_builder_service, question_management_service, vc_
             }), 201
 
         except Exception as e:
+            answer_service.close_session()
+            wf_builder_service.close_session()
+            question_management_service.close_session()
             return jsonify({"error": str(e)}), 500
 
 
