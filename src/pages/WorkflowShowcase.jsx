@@ -10,8 +10,9 @@ import {
 import config from "../../config";
 
 const WorkflowQuiz = () => {
-  const { workflow_id, incident_number } = useParams();
+  const { workflow_name, incident_number } = useParams();
   const navigate = useNavigate();
+  const [workflowId, setWorkflowId] = useState(null);
   //const [workflowName, setWorkflowName] = useState("");
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -24,6 +25,7 @@ const WorkflowQuiz = () => {
   const [completedQuestions, setCompletedQuestions] = useState({});
   const [completedAnswers, setCompletedAnswers] = useState({});
   const [isWorkflowFilled, setIsWorkflowFilled] = useState(false);
+  const [loadingWorkflowId, setLoadingWorkflowId] = useState(true);
 
  // const fetchWorkflowName = useCallback(async () => {
   //  try {
@@ -42,11 +44,49 @@ const WorkflowQuiz = () => {
  // useEffect(() => {
   //  fetchWorkflowName();
  // }, [fetchWorkflowName]);
-
-  const fetchPreviousResponses = useCallback(async () => {
+  const getWorkflowId = useCallback(async () => {
     try {
+      console.log("Fetching workflow_id...");
+      console.log("workflow_name:", workflow_name);
       const response = await fetch(
-        `${config.API_BASE_URL}/api/workflows/${workflow_id}/responses/${incident_number}`
+        `${config.API_BASE_URL}/api/workflows/get_id`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ workflow_name }), // Send workflow_name to API
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Error fetching workflow_id: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (data.workflow_id) {
+        console.log(`Fetched workflow_id: ${data.workflow_id}`);
+        setWorkflowId(data.workflow_id);
+      } else {
+        throw new Error("Workflow not found");
+      }
+    } catch (error) {
+      console.error("Error getting workflow_id:", error);
+      setError(error.message);
+      setLoading(false);
+    }
+    finally{
+      setLoadingWorkflowId(false);
+    }
+  }, [workflow_name]);
+
+  const fetchPreviousResponses = useCallback(async (id) => {
+    try {
+      console.log(
+        `Fetching responses for workflow_id: ${id} and incident_number: ${incident_number}`
+      );
+      const response = await fetch(
+        `${config.API_BASE_URL}/api/workflows/${id}/responses/${incident_number}`
       );
 
       if (response.status === 404) {
@@ -69,7 +109,7 @@ const WorkflowQuiz = () => {
           answer: response.answer_text,
           timestamp: new Date().toISOString(),
           incident_number: incident_number,
-          workflow_id: workflow_id,
+          workflow_id: workflowId,
         };
       });
 
@@ -81,13 +121,13 @@ const WorkflowQuiz = () => {
       // If there's an error, we'll assume the workflow needs to be filled
       setIsWorkflowFilled(false);
     }
-  }, [workflow_id, incident_number]);
+  }, [incident_number, workflowId]);
 
-  const fetchQuestions = useCallback(async () => {
+  const fetchQuestions = useCallback(async (id) => {
     try {
       setLoading(true);
       const response = await fetch(
-        `${config.API_BASE_URL}/api/workflows/${workflow_id}/questions-and-options`
+        `${config.API_BASE_URL}/api/workflows/${id}/questions-and-options`
       );
       if (!response.ok) throw new Error("Failed to fetch questions");
       const data = await response.json();
@@ -100,17 +140,32 @@ const WorkflowQuiz = () => {
       setQuestions(normalizedData);
 
       // After fetching questions, check for previous responses
-      await fetchPreviousResponses();
+      await fetchPreviousResponses(id);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [workflow_id, fetchPreviousResponses]);
+  }, [fetchPreviousResponses]);
 
   useEffect(() => {
-    fetchQuestions();
-  }, [fetchQuestions]);
+    const fetchWorkflowAndQuestions = async () => {
+      await getWorkflowId(); // Get workflow_id first
+    };
+    fetchWorkflowAndQuestions();
+  }, [getWorkflowId]);
+
+  useEffect(() => {
+    if (workflowId) {
+      fetchQuestions(workflowId);
+    }
+  }, [workflowId, fetchQuestions]);
+
+  useEffect(() => {
+    if (!loadingWorkflowId && (!workflowId || !incident_number)) {
+      setError("Both workflow ID and incident number are required");
+    }
+  }, [workflowId, incident_number, loadingWorkflowId]);
 
   const advanceToNextQuestion = (nextQuestionId = null) => {
     console.log("Advancing to next question:", {
@@ -146,13 +201,6 @@ const WorkflowQuiz = () => {
     setSelectedOptions({});
     setSelectedUsers({});
   };
-
-  useEffect(() => {
-    if (!workflow_id || !incident_number) {
-      setError("Both workflow ID and incident number are required");
-      return;
-    }
-  }, [workflow_id, incident_number]);
 
   // Enhanced submitAnswer function
   const submitAnswer = async (
@@ -261,7 +309,7 @@ const WorkflowQuiz = () => {
         answer_text: isSkipped ? "SKIPPED" : answerText,
         is_skipped: isSkipped,
         incident_number: incident_number,
-        workflow_id: workflow_id,
+        workflow_id: workflowId,
         timestamp: timestamp, // Include timestamp in submission payload
       };
 
@@ -292,7 +340,7 @@ const WorkflowQuiz = () => {
         selectedOptions: selectedOptions[questionId] || {},
         selectedUsers: selectedUsers[questionId] || {},
         incident_number: incident_number,
-        workflow_id: workflow_id,
+        workflow_id: workflowId,
         timestamp: new Date().toISOString(),
       };
 
@@ -760,6 +808,23 @@ const WorkflowQuiz = () => {
   };
 
   // Loading state
+  if (loadingWorkflowId) {
+    return (
+      <div className="dark">
+        <div className="container lg:max-w-full mx-auto px-4 py-8 bg-black min-h-screen">
+          <div className="text-center text-2xl font-bold text-gray-300 mb-8">
+            Workflow - Incident Number {incident_number}
+          </div>
+          <Card className="max-w-2xl mx-auto mt-8 bg-[#1e2736]">
+            <CardContent className="flex justify-center items-center h-40">
+              <div className="text-gray-400">Loading workflow...</div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+  // Loading state
   if (loading) {
     return (
       <div className="dark">
@@ -776,6 +841,7 @@ const WorkflowQuiz = () => {
       </div>
     );
   }
+
 
   // Error state
   if (error) {

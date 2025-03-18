@@ -15,23 +15,34 @@ def setup_workflow_api(app, wf_builder_service, question_management_service, vc_
         # Create an instance of VC_DB_Service using the vc_db_session
         vc_service = VC_DB_Service(db_session=vc_db_session)
 
-    
-    
-    @workflow_api.route('/workflows/check-name', methods=['GET'])
-    def check_workflow_name():
-        """Check if a workflow name is unique"""
-        try:
-            workflow_name = request.args.get('name')
-            if not workflow_name:
-                return jsonify({"error": "Name is required"}), 400
-            
-            # Trim and convert to lowercase for case-insensitive comparison
-            workflow_name = workflow_name.strip().lower()
-            
-            is_unique = wf_builder_service.is_workflow_name_unique(workflow_name)
-            return jsonify({"is_unique": is_unique})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+    @workflow_api.route('/workflows/get_id', methods=['POST'])
+    def get_workflow_id():
+        """Fetch workflow_id using workflow_name from request body."""
+        
+        print("API Hit: /api/workflows/get_id")
+        data = request.get_json()
+
+        if not data:
+            print("No data received or invalid JSON")
+            return jsonify({"error": "Invalid or missing JSON"}), 400
+
+        # Check if 'workflow_name' is provided in the request body
+        workflow_name = data.get("workflow_name")
+        if not workflow_name:
+            print("workflow_name is missing from request body")
+            return jsonify({"error": "workflow_name is required"}), 400
+
+        print(f"Received workflow_name: {workflow_name}")
+
+        # Fetch workflow_id using the service function
+        workflow_id = wf_builder_service.get_workflow_id_by_name(workflow_name)
+
+        if workflow_id is None:
+            print(f"No matching workflow found for: {workflow_name}")
+            return jsonify({"error": "Workflow not found"}), 404
+
+        print(f"Found workflow_id: {workflow_id}")
+        return jsonify({"workflow_id": workflow_id}), 200
 
     @workflow_api.route('/workflows', methods=['POST'])
     def create_workflow():

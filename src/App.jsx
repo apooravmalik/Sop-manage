@@ -90,19 +90,69 @@ const WorkflowModalWrapper = ({ children }) => {
   const [incidentNumber, setIncidentNumber] = useState("");
   const [showModal, setShowModal] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [workflowId, setWorkflowId] = useState(null);
+  const [workflowName, setWorkflowName] = useState(""); // Store workflowName
+
+  // Fetch workflow_id from workflow_name
+  const getWorkflowId = async (workflowName) => {
+    try {
+      console.log(`Fetching workflow_id for ${workflowName}...`);
+      const response = await fetch(
+        `${config.API_BASE_URL}/api/workflows/get_id`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ workflow_name: workflowName }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch workflow_id");
+      }
+
+      const data = await response.json();
+      if (data.workflow_id) {
+        console.log(`Fetched workflow_id: ${data.workflow_id}`);
+        setWorkflowId(data.workflow_id);
+        setWorkflowName(workflowName); // Set workflowName in state
+      } else {
+        throw new Error("Workflow not found");
+      }
+    } catch (error) {
+      console.error("Error fetching workflow_id:", error);
+      setErrorMessage("Unable to fetch workflow. Please try again.");
+    }
+  };
+
+  // Extract workflow_name from URL and fetch workflow_id
+  useState(() => {
+    const workflowName = window.location.pathname.split("/")[2];
+    if (workflowName) {
+      getWorkflowId(workflowName);
+    }
+  }, []);
 
   const handleSubmit = async () => {
+    if (!workflowId) {
+      setErrorMessage("Workflow is not ready. Please try again.");
+      return;
+    }
+
     if (incidentNumber.trim()) {
       try {
-        const workflowId = window.location.pathname.split("/")[2];
+        console.log(`Validating incident ${incidentNumber}...`);
         const response = await fetch(
           `${config.API_BASE_URL}/api/incident-log/check?incidentlog_prk=${incidentNumber}&workflow_id=${workflowId}`
         );
+
         const data = await response.json();
 
         if (response.ok && data.exists) {
           setShowModal(false);
-          navigate(`/workflow/${workflowId}/${incidentNumber}`);
+          //Navigate using workflowName instead of workflowId
+          navigate(`/workflow/${workflowName}/${incidentNumber}`);
         } else if (data.error) {
           if (data.error === "Incident is closed") {
             setErrorMessage("This incident is closed and cannot be accessed.");
@@ -143,9 +193,14 @@ const WorkflowModalWrapper = ({ children }) => {
             )}
             <button
               onClick={handleSubmit}
-              className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition"
+              className={`w-full py-2 px-4 rounded-lg transition ${
+                workflowId
+                  ? "bg-blue-500 text-white hover:bg-blue-600"
+                  : "bg-gray-500 text-gray-300 cursor-not-allowed"
+              }`}
+              disabled={!workflowId}
             >
-              Submit
+              {workflowId ? "Submit" : "Loading Workflow..."}
             </button>
           </div>
         </div>
@@ -169,7 +224,7 @@ const App = () => {
             <Route path="/workflow-collection" element={<WorkflowCollection />} />
             <Route path="/builder" element={<WorkflowBuilder />} />
             <Route
-              path="/workflow/:workflow_id"
+              path="/workflow/:workflow_name"
               element={
                 <WorkflowModalWrapper>
                   <WorkflowQuiz />
@@ -177,10 +232,10 @@ const App = () => {
               }
             />
             <Route
-              path="/workflow/:workflow_id/:incident_number"
+              path="/workflow/:workflow_name/:incident_number"
               element={<WorkflowQuiz />}
             />
-            <Route path="/workflow-view/:workflowId" element={<WorkflowView />} />
+            <Route path="/workflow-view/:workflow_name" element={<WorkflowView />} />
           </Routes>
         </Layout>
       </ThemeProvider>

@@ -10,30 +10,77 @@ import {
 import config from "../../config";
 
 const WorkflowView = () => {
-  const { workflowId } = useParams();
+  const { workflow_name } = useParams();
   const [workflowData, setWorkflowData] = useState(null);
+  const [workflowId, setWorkflowId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchWorkflowData = async () => {
-      try {
-        const response = await fetch(
-          `${config.API_BASE_URL}/api/workflows/${workflowId}`
-        );
-        if (!response.ok) {
-          throw new Error(`Error fetching workflow: ${response.statusText}`);
+  // Fetch workflow_id based on workflow_name
+  const getWorkflowId = async () => {
+    try {
+      console.log("API URL:", `${config.API_BASE_URL}/api/workflows/get_id`);
+      const response = await fetch(
+        `${config.API_BASE_URL}/api/workflows/get_id`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ workflow_name }),
         }
-        const data = await response.json();
-        setWorkflowData(data);
-      } catch (error) {
-        setError(error.message);
-      } finally {
-        setLoading(false);
+      );
+
+      if (!response.ok) {
+        throw new Error(`Error fetching workflow_id: ${response.statusText}`);
       }
+
+      const data = await response.json();
+      if (data.workflow_id) {
+        console.log(`Fetched workflow_id: ${data.workflow_id}`);
+        setWorkflowId(data.workflow_id);
+      } else {
+        throw new Error("Workflow not found");
+      }
+    } catch (error) {
+      console.error("Error getting workflow_id:", error);
+      setError(error.message);
+      setLoading(false);
+    }
+  };
+
+  // Fetch workflow data based on workflow_id
+  const fetchWorkflowData = async (id) => {
+    try {
+      const response = await fetch(
+        `${config.API_BASE_URL}/api/workflows/${id}`
+      );
+      if (!response.ok) {
+        throw new Error(`Error fetching workflow: ${response.statusText}`);
+      }
+      const data = await response.json();
+      setWorkflowData(data);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Fetch workflow_id first, then load workflow data
+    const loadWorkflow = async () => {
+      await getWorkflowId();
     };
 
-    fetchWorkflowData();
+    loadWorkflow();
+  }, [workflow_name]);
+
+  // Fetch workflow data after workflow_id is set
+  useEffect(() => {
+    if (workflowId) {
+      fetchWorkflowData(workflowId);
+    }
   }, [workflowId]);
 
   if (loading) return <div>Loading...</div>;

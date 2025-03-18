@@ -12,12 +12,6 @@ load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Detect if running inside Docker
-RUNNING_IN_DOCKER = os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true"
-
-# Select correct server address
-DB_SERVER = "host.docker.internal" if RUNNING_IN_DOCKER else os.getenv('DB_SERVER', '127.0.0.1')
-
 # Database configuration for sop-manage
 DB_CONFIG = {
     'driver': os.getenv('DB_DRIVER', 'ODBC Driver 17 for SQL Server'),

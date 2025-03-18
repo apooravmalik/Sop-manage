@@ -423,6 +423,33 @@ class WorkflowBuilderService:
             logger.error(f"Error fetching questions and options for workflow_id {workflow_id}: {str(e)}")
             raise
         
+    def get_workflow_id_by_name(self, workflow_name: str):
+        """
+        Fetch workflow_id using workflow_name (case-insensitive).
+        
+        Args:
+            workflow_name (str): Name of the workflow to search.
+        
+        Returns:
+            int or None: The workflow_id if found, otherwise None.
+        """
+        try:
+            # Strip and convert to lowercase for case-insensitive comparison
+            workflow_name = workflow_name.strip().lower()
+
+            # Query to find the workflow_id
+            workflow = self.db.query(Workflow).filter(
+                func.lower(Workflow.workflow_name) == workflow_name
+            ).first()
+
+            if workflow:
+                return workflow.workflow_id
+            return None
+
+        except Exception as e:
+            print(f"Error fetching workflow_id: {str(e)}")
+            return None
+        
     def close_session(self):
         """Safely close the database session if it exists."""
         if self.db:

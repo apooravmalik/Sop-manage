@@ -70,7 +70,7 @@ const WorkflowList = () => {
               <CardContent className="p-4">
                 <div className="flex justify-between items-center">
                   <a
-                    href={`/workflow/${workflow.workflow_id}`}
+                    href={`/workflow/${workflow.workflow_name}`}
                     className="text-lg text-black font-semibold dark:text-white hover:underline"
                   >
                     {workflow.workflow_name}
