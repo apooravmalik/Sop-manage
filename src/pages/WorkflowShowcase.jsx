@@ -13,7 +13,6 @@ const WorkflowQuiz = () => {
   const { workflow_name, incident_number } = useParams();
   const navigate = useNavigate();
   const [workflowId, setWorkflowId] = useState(null);
-  //const [workflowName, setWorkflowName] = useState("");
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState({});
@@ -26,24 +25,71 @@ const WorkflowQuiz = () => {
   const [completedAnswers, setCompletedAnswers] = useState({});
   const [isWorkflowFilled, setIsWorkflowFilled] = useState(false);
   const [loadingWorkflowId, setLoadingWorkflowId] = useState(true);
+  const [lastFilledQuestionId, setLastFilledQuestionId] = useState(null);
 
- // const fetchWorkflowName = useCallback(async () => {
-  //  try {
-  //    const response = await fetch(
-  //      `${config.API_BASE_URL}/api/workflows/${workflow_id}`
-   //   );
-   //   if (!response.ok) throw new Error("Failed to fetch workflow name");
-  //    const data = await response.json();
-   //   setWorkflowName(data.workflow_name || "");
-  //  } catch (err) {
-  //    console.error("Error fetching workflow name:", err);
-   //   setWorkflowName("");
-  //  }
-  //}, [workflow_id]);
+  // Function to create a storage key based on workflow and incident
+  const getStorageKey = useCallback(() => {
+    return `workflow_progress_${workflow_name}_${incident_number}`;
+  }, [workflow_name, incident_number]);
 
- // useEffect(() => {
-  //  fetchWorkflowName();
- // }, [fetchWorkflowName]);
+  // Function to save progress to localStorage
+  const saveProgress = useCallback(
+    (questionId, answers) => {
+      if (!workflowId || !incident_number) return;
+
+      const storageKey = getStorageKey();
+      const progressData = {
+        workflowId,
+        incident_number,
+        lastFilledQuestionId: questionId,
+        completedQuestions: Object.keys(completedQuestions),
+        completedAnswers,
+        timestamp: new Date().toISOString(),
+      };
+
+      localStorage.setItem(storageKey, JSON.stringify(progressData));
+      console.log(`Progress saved for question ${questionId}`);
+    },
+    [
+      workflowId,
+      incident_number,
+      completedQuestions,
+      getStorageKey,
+      completedAnswers,
+    ]
+  );
+
+  // Function to load progress from localStorage
+  const loadProgress = useCallback(() => {
+    if (!workflow_name || !incident_number) return null;
+
+    const storageKey = getStorageKey();
+    const savedProgress = localStorage.getItem(storageKey);
+
+    if (savedProgress) {
+      try {
+        const progressData = JSON.parse(savedProgress);
+        console.log("Found saved progress:", progressData);
+        return progressData;
+      } catch (err) {
+        console.error("Error parsing saved progress:", err);
+        return null;
+      }
+    }
+    return null;
+  }, [workflow_name, incident_number, getStorageKey]);
+
+  // Check if workflow is complete
+  const checkWorkflowComplete = useCallback((lastQuestionId, allQuestions) => {
+    if (!allQuestions || allQuestions.length === 0) return false;
+
+    // Find the last question in the workflow
+    const lastQuestion = allQuestions[allQuestions.length - 1];
+
+    // If the last filled question matches the last question in the workflow, consider it complete
+    return lastQuestionId === lastQuestion.question_id;
+  }, []);
+
   const getWorkflowId = useCallback(async () => {
     try {
       console.log("Fetching workflow_id...");
@@ -55,7 +101,7 @@ const WorkflowQuiz = () => {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ workflow_name }), // Send workflow_name to API
+          body: JSON.stringify({ workflow_name }),
         }
       );
 
@@ -74,79 +120,125 @@ const WorkflowQuiz = () => {
       console.error("Error getting workflow_id:", error);
       setError(error.message);
       setLoading(false);
-    }
-    finally{
+    } finally {
       setLoadingWorkflowId(false);
     }
   }, [workflow_name]);
 
-  const fetchPreviousResponses = useCallback(async (id) => {
-    try {
-      console.log(
-        `Fetching responses for workflow_id: ${id} and incident_number: ${incident_number}`
-      );
-      const response = await fetch(
-        `${config.API_BASE_URL}/api/workflows/${id}/responses/${incident_number}`
-      );
+  const fetchPreviousResponses = useCallback(
+    async (id) => {
+      try {
+        console.log(
+          `Fetching responses for workflow_id: ${id} and incident_number: ${incident_number}`
+        );
+        const response = await fetch(
+          `${config.API_BASE_URL}/api/workflows/${id}/responses/${incident_number}`
+        );
 
-      if (response.status === 404) {
-        // No previous responses found, workflow needs to be filled
+        if (response.status === 404) {
+          // No previous responses found, workflow needs to be filled
+          setIsWorkflowFilled(false);
+          return;
+        }
+
+        if (!response.ok) throw new Error("Failed to fetch previous responses");
+
+        const previousResponses = await response.json();
+
+        // Mark all questions as completed and store their answers
+        const completedQs = {};
+        const completedAns = {};
+        let lastAnsweredQuestionId = null;
+
+        previousResponses.forEach((response) => {
+          completedQs[response.question_id] = true;
+          completedAns[response.question_id] = {
+            answer: response.answer_text,
+            timestamp: new Date().toISOString(),
+            incident_number: incident_number,
+            workflow_id: workflowId,
+          };
+
+          // Track the last answered question ID
+          lastAnsweredQuestionId = response.question_id;
+        });
+
+        setCompletedQuestions(completedQs);
+        setCompletedAnswers(completedAns);
+
+        if (lastAnsweredQuestionId) {
+          setLastFilledQuestionId(lastAnsweredQuestionId);
+        }
+
+        // Don't set isWorkflowFilled here - we should check if it's actually complete first
+        // We'll determine this after fetching questions
+      } catch (err) {
+        console.error("Error fetching previous responses:", err);
+        // If there's an error, we'll assume the workflow needs to be filled
         setIsWorkflowFilled(false);
-        return;
       }
+    },
+    [incident_number, workflowId]
+  );
 
-      if (!response.ok) throw new Error("Failed to fetch previous responses");
+  const fetchQuestions = useCallback(
+    async (id) => {
+      try {
+        setLoading(true);
+        const response = await fetch(
+          `${config.API_BASE_URL}/api/workflows/${id}/questions-and-options`
+        );
+        if (!response.ok) throw new Error("Failed to fetch questions");
+        const data = await response.json();
 
-      const previousResponses = await response.json();
+        const normalizedData = data.map((question) => ({
+          ...question,
+          question_type: question.question_type.toLowerCase().replace(/_/g, ""),
+        }));
 
-      // Mark all questions as completed and store their answers
-      const completedQs = {};
-      const completedAns = {};
+        setQuestions(normalizedData);
 
-      previousResponses.forEach((response) => {
-        completedQs[response.question_id] = true;
-        completedAns[response.question_id] = {
-          answer: response.answer_text,
-          timestamp: new Date().toISOString(),
-          incident_number: incident_number,
-          workflow_id: workflowId,
-        };
-      });
+        // After fetching questions, check for previous responses
+        await fetchPreviousResponses(id);
 
-      setCompletedQuestions(completedQs);
-      setCompletedAnswers(completedAns);
-      setIsWorkflowFilled(true);
-    } catch (err) {
-      console.error("Error fetching previous responses:", err);
-      // If there's an error, we'll assume the workflow needs to be filled
-      setIsWorkflowFilled(false);
-    }
-  }, [incident_number, workflowId]);
+        // Now that we have both questions and previous responses, check if workflow is complete
+        if (lastFilledQuestionId) {
+          const isComplete = checkWorkflowComplete(
+            lastFilledQuestionId,
+            normalizedData
+          );
+          setIsWorkflowFilled(isComplete);
+        }
 
-  const fetchQuestions = useCallback(async (id) => {
-    try {
-      setLoading(true);
-      const response = await fetch(
-        `${config.API_BASE_URL}/api/workflows/${id}/questions-and-options`
-      );
-      if (!response.ok) throw new Error("Failed to fetch questions");
-      const data = await response.json();
+        // Try to load progress from localStorage
+        const savedProgress = loadProgress();
+        if (savedProgress) {
+          // Check if the workflow is complete based on saved progress
+          const isComplete = checkWorkflowComplete(
+            savedProgress.lastFilledQuestionId,
+            normalizedData
+          );
 
-      const normalizedData = data.map((question) => ({
-        ...question,
-        question_type: question.question_type.toLowerCase().replace(/_/g, ""),
-      }));
-
-      setQuestions(normalizedData);
-
-      // After fetching questions, check for previous responses
-      await fetchPreviousResponses(id);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchPreviousResponses]);
+          if (isComplete) {
+            setIsWorkflowFilled(true);
+          } else {
+            setIsWorkflowFilled(false);
+            // Restore completed questions and answers...
+          }
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      fetchPreviousResponses,
+      loadProgress,
+      checkWorkflowComplete,
+      lastFilledQuestionId,
+    ]
+  );
 
   useEffect(() => {
     const fetchWorkflowAndQuestions = async () => {
@@ -162,6 +254,17 @@ const WorkflowQuiz = () => {
   }, [workflowId, fetchQuestions]);
 
   useEffect(() => {
+    if (questions.length > 0) {
+      const nextUnansweredIndex = questions.findIndex(
+        (question) => !completedQuestions[question.question_id]
+      );
+      if (nextUnansweredIndex !== -1) {
+        setCurrentQuestionIndex(nextUnansweredIndex);
+      }
+    }
+  }, [questions, completedQuestions]);
+
+  useEffect(() => {
     if (!loadingWorkflowId && (!workflowId || !incident_number)) {
       setError("Both workflow ID and incident number are required");
     }
@@ -174,10 +277,17 @@ const WorkflowQuiz = () => {
     });
 
     // Mark current question as completed
+    const currentQuestionId = questions[currentQuestionIndex].question_id;
     setCompletedQuestions((prev) => ({
       ...prev,
-      [questions[currentQuestionIndex].question_id]: true,
+      [currentQuestionId]: true,
     }));
+
+    // Save this as the last filled question
+    setLastFilledQuestionId(currentQuestionId);
+
+    // Save progress to localStorage
+    saveProgress(currentQuestionId, completedAnswers);
 
     // Navigate to the next question using the provided next_question_id
     if (nextQuestionId) {
@@ -345,10 +455,12 @@ const WorkflowQuiz = () => {
       };
 
       // Update state
-      setCompletedAnswers((prev) => ({
-        ...prev,
+      const updatedCompletedAnswers = {
+        ...completedAnswers,
         [questionId]: answerMetadata,
-      }));
+      };
+
+      setCompletedAnswers(updatedCompletedAnswers);
 
       setAnswers((prev) => ({
         ...prev,
@@ -361,8 +473,23 @@ const WorkflowQuiz = () => {
         [questionId]: true,
       }));
 
+      // Update last filled question ID
+      setLastFilledQuestionId(questionId);
+
+      // Save progress to localStorage
+      saveProgress(questionId, updatedCompletedAnswers);
+
       // Clear any existing errors
       setError(null);
+
+      // Check if this is the last question
+      const isLastQuestion =
+        questions.findIndex((q) => q.question_id === questionId) ===
+        questions.length - 1;
+      if (isLastQuestion) {
+        // If this is the last question, mark the workflow as completed
+        setIsWorkflowFilled(true);
+      }
 
       // Advance to next question
       advanceToNextQuestion(finalNextQuestionId);
@@ -370,6 +497,13 @@ const WorkflowQuiz = () => {
       console.error("Error submitting answer:", err);
       setError(err.message);
     }
+  };
+
+  // Clear progress function (for debugging or reset functionality)
+  const clearProgress = () => {
+    const storageKey = getStorageKey();
+    localStorage.removeItem(storageKey);
+    console.log("Progress cleared");
   };
 
   const handleCheckboxChange = (questionId, optionText, isChecked) => {
@@ -665,6 +799,13 @@ const WorkflowQuiz = () => {
                   Submit Selected Option
                 </button>
 
+                <button
+                  onClick={() => navigate("/")}
+                  className="flex-1 px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-800"
+                >
+                  Home
+                </button>
+
                 {!currentQuestion.is_required && (
                   <button
                     onClick={() =>
@@ -733,6 +874,13 @@ const WorkflowQuiz = () => {
                   Submit Selected Users
                 </button>
 
+                <button
+                  onClick={() => navigate("/")}
+                  className="flex-1 px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-800"
+                >
+                  Home
+                </button>
+
                 {!currentQuestion.is_required && (
                   <button
                     onClick={() =>
@@ -768,6 +916,13 @@ const WorkflowQuiz = () => {
                   Submit Answer
                 </button>
 
+                <button
+                  onClick={() => navigate("/")}
+                  className="flex-1 px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-800"
+                >
+                  Home
+                </button>
+
                 {!currentQuestion.is_required && (
                   <button
                     onClick={() =>
@@ -797,6 +952,12 @@ const WorkflowQuiz = () => {
                 className="flex-1 px-4 py-2 bg-blue-800 text-white rounded hover:bg-blue-900 disabled:bg-gray-700 disabled:cursor-not-allowed"
               >
                 Confirm and Continue
+              </button>
+              <button
+                onClick={() => navigate("/")}
+                className="flex-1 px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-800"
+              >
+                Home
               </button>
             </div>
           </div>
@@ -841,7 +1002,6 @@ const WorkflowQuiz = () => {
       </div>
     );
   }
-
 
   // Error state
   if (error) {
@@ -923,18 +1083,8 @@ const WorkflowQuiz = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {index === currentQuestionIndex && (
-                    <div className="space-y-4">
-                      {question.question_type !== "instruction" && (
-                        <div className="font-medium text-lg text-white">
-                          {question.question_text}
-                        </div>
-                      )}
-                      {renderQuestionContent()}
-                    </div>
-                  )}
-
-                  {completedQuestions[question.question_id] && (
+                  {completedQuestions[question.question_id] ? (
+                    // Show completed answers only
                     <div className="space-y-4 mt-4">
                       {question.question_type !== "instruction" && (
                         <div className="font-medium text-lg text-gray-400">
@@ -946,7 +1096,17 @@ const WorkflowQuiz = () => {
                         completedAnswers[question.question_id]
                       )}
                     </div>
-                  )}
+                  ) : index === currentQuestionIndex ? (
+                    // Show the next unanswered question for input
+                    <div className="space-y-4">
+                      {question.question_type !== "instruction" && (
+                        <div className="font-medium text-lg text-white">
+                          {question.question_text}
+                        </div>
+                      )}
+                      {renderQuestionContent()}
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
             ))}

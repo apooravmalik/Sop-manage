@@ -59,26 +59,6 @@ const WorkflowBuilder = () => {
     }
   }, [baseQuestionId]);
 
-
-  const checkWorkflowNameUnique = async (workflowName) => {
-    try {
-      const response = await fetch(
-        `${config.API_BASE_URL}/api/workflows/check-name?name=${encodeURIComponent(workflowName)}`
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to check workflow name');
-      }
-
-      const data = await response.json();
-      return data.is_unique;
-    } catch (error) {
-      console.error("Error checking workflow name:", error);
-      toast.error("Unable to verify workflow name");
-      return false;
-    }
-  };
-
   const fetchLastQuestionId = async () => {
     try {
       const response = await fetch(
@@ -142,7 +122,7 @@ const WorkflowBuilder = () => {
     newQuestions.splice(index + 1, 0, questionToDuplicate);
 
     setQuestions(newQuestions);
-  };;
+  };
 
   const updateQuestionText = (index, text) => {
     const newQuestions = [...questions];
@@ -275,7 +255,6 @@ const WorkflowBuilder = () => {
     };
   };
 
-
   const validateWorkflow = () => {
     if (!workflowTitle.trim()) {
       return false;
@@ -301,17 +280,6 @@ const WorkflowBuilder = () => {
 
     setIsSubmitting(true);
     try {
-      // Check workflow name uniqueness first
-      const isUnique = await checkWorkflowNameUnique(workflowTitle);
-
-      if (!isUnique) {
-        toast.error("Workflow name must be unique", {
-          description: "Please choose a different workflow name."
-        });
-        setIsSubmitting(false);
-        return;
-      }
-
       const workflowData = formatWorkflowData();
 
       const response = await fetch(`${config.API_BASE_URL}/api/workflows`, {
@@ -322,11 +290,21 @@ const WorkflowBuilder = () => {
         body: JSON.stringify(workflowData),
       });
 
+      // Parse the response data
+      const result = await response.json();
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Handle the error response from the backend
+        if (result.status === "name_not_unique") {
+          toast.error("Workflow name must be unique", {
+            description: "Please choose a different workflow name."
+          });
+        } else {
+          throw new Error(result.error || `HTTP error! status: ${response.status}`);
+        }
+        return;
       }
 
-      const result = await response.json();
       console.log("Workflow saved successfully:", result);
 
       // Add success toast
