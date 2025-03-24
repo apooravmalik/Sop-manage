@@ -458,7 +458,7 @@ class WorkflowBuilderService:
             except Exception as e:
                 logger.error(f"Error closing database session: {str(e)}")
 
-        
+    
 class AnswerService:
     def __init__(self, db_session: Session):
         self.db = db_session

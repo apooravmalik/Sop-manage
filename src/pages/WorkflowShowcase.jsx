@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Card,
@@ -26,6 +26,7 @@ const WorkflowQuiz = () => {
   const [isWorkflowFilled, setIsWorkflowFilled] = useState(false);
   const [loadingWorkflowId, setLoadingWorkflowId] = useState(true);
   const [lastFilledQuestionId, setLastFilledQuestionId] = useState(null);
+  const forceNavigationRef = useRef(null);
 
   // Function to create a storage key based on workflow and incident
   const getStorageKey = useCallback(() => {
@@ -255,6 +256,9 @@ const WorkflowQuiz = () => {
 
   useEffect(() => {
     if (questions.length > 0) {
+      // Don't auto-navigate if we're in the middle of explicit navigation
+      if (forceNavigationRef.current) return;
+
       const nextUnansweredIndex = questions.findIndex(
         (question) => !completedQuestions[question.question_id]
       );
@@ -272,9 +276,21 @@ const WorkflowQuiz = () => {
 
   const advanceToNextQuestion = (nextQuestionId = null) => {
     console.log("Advancing to next question:", {
-      currentQuestionId: questions[currentQuestionIndex].question_id,
+      currentQuestionId: questions[currentQuestionIndex]?.question_id,
       nextQuestionId,
     });
+
+    if (!questions[currentQuestionIndex]) {
+      console.warn("No current question found, stopping navigation.");
+      return;
+    }
+
+    // Store the next question ID in a ref for later use
+    if (nextQuestionId) {
+      forceNavigationRef.current = nextQuestionId;
+    } else {
+      forceNavigationRef.current = null;
+    }
 
     // Mark current question as completed
     const currentQuestionId = questions[currentQuestionIndex].question_id;
@@ -289,27 +305,43 @@ const WorkflowQuiz = () => {
     // Save progress to localStorage
     saveProgress(currentQuestionId, completedAnswers);
 
-    // Navigate to the next question using the provided next_question_id
-    if (nextQuestionId) {
-      const nextIndex = questions.findIndex(
-        (q) => q.question_id === nextQuestionId
-      );
+    // Use setTimeout to ensure state updates have processed
+    setTimeout(() => {
+      if (forceNavigationRef.current) {
+        console.log("Force navigating to:", forceNavigationRef.current);
+        const nextIndex = questions.findIndex(
+          (q) => Number(q.question_id) === Number(forceNavigationRef.current)
+        );
 
-      if (nextIndex !== -1) {
-        setCurrentQuestionIndex(nextIndex);
+        if (nextIndex !== -1) {
+          console.log(`Force navigation to index: ${nextIndex}`);
+          setCurrentQuestionIndex(nextIndex);
+        }
       } else {
-        // Fallback to sequential navigation if next_question_id is not found
-        setCurrentQuestionIndex((prev) => prev + 1);
+        moveToNextUnanswered();
       }
-    } else {
-      // Default sequential navigation
-      setCurrentQuestionIndex((prev) => prev + 1);
-    }
 
-    // Reset states
-    setTextInput("");
-    setSelectedOptions({});
-    setSelectedUsers({});
+      // Reset input states
+      setTextInput("");
+      setSelectedOptions({});
+      setSelectedUsers({});
+    }, 0);
+  };
+
+  const moveToNextUnanswered = () => {
+    const nextUnansweredIndex = questions.findIndex(
+      (q, idx) =>
+        idx > currentQuestionIndex && !completedQuestions[q.question_id]
+    );
+
+    if (nextUnansweredIndex !== -1) {
+      console.log(
+        `Navigating to next unanswered question: ${questions[nextUnansweredIndex].question_id}`
+      );
+      setCurrentQuestionIndex(nextUnansweredIndex);
+    } else {
+      console.log("No more unanswered questions.");
+    }
   };
 
   // Enhanced submitAnswer function
@@ -555,6 +587,14 @@ const WorkflowQuiz = () => {
     // Find the selected option object
     const selectedOptionObj = currentQuestion.options.find(
       (option) => option.option_text === selectedOption
+    );
+
+    // Log for debugging
+    console.log("Selected option:", selectedOption);
+    console.log("Selected option object:", selectedOptionObj);
+    console.log(
+      "Next question ID from option:",
+      selectedOptionObj?.next_question_id
     );
 
     // Use the next_question_id from the selected option
@@ -1059,15 +1099,24 @@ const WorkflowQuiz = () => {
           Workflow - Incident Number {incident_number}
         </div>
         <div className="space-y-6">
-          {questions
-            .slice(0, currentQuestionIndex + 1)
-            .map((question, index) => (
+          {questions.map((question, index) => {
+            // Only show if it's completed or the current active question
+            const isCompleted = completedQuestions[question.question_id];
+            const isCurrent =
+              question.question_id ===
+              questions[currentQuestionIndex]?.question_id;
+
+            if (!isCompleted && !isCurrent) {
+              return null; // Don't render this question
+            }
+
+            return (
               <Card
                 key={question.question_id}
                 className={`max-w-2xl mx-auto ${
-                  completedQuestions[question.question_id]
+                  isCompleted
                     ? "bg-[#1e2736] text-gray-400"
-                    : index === currentQuestionIndex
+                    : isCurrent
                     ? "border-blue-800 border-2"
                     : "bg-[#1e2736]"
                 }`}
@@ -1083,7 +1132,7 @@ const WorkflowQuiz = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {completedQuestions[question.question_id] ? (
+                  {isCompleted ? (
                     // Show completed answers only
                     <div className="space-y-4 mt-4">
                       {question.question_type !== "instruction" && (
@@ -1096,8 +1145,8 @@ const WorkflowQuiz = () => {
                         completedAnswers[question.question_id]
                       )}
                     </div>
-                  ) : index === currentQuestionIndex ? (
-                    // Show the next unanswered question for input
+                  ) : isCurrent ? (
+                    // Show the active question for input
                     <div className="space-y-4">
                       {question.question_type !== "instruction" && (
                         <div className="font-medium text-lg text-white">
@@ -1109,7 +1158,8 @@ const WorkflowQuiz = () => {
                   ) : null}
                 </CardContent>
               </Card>
-            ))}
+            );
+          })}
         </div>
 
         {/* Check if all questions are completed */}
