@@ -733,4 +733,53 @@ class VC_DB_Service:
         except SQLAlchemyError as e:
             logger.error(f"Database error: {str(e)}")
             raise RuntimeError(f"Database error: {str(e)}")
+        
+        
+    def get_workflow_name_by_incident(self, incident_number):
+        """
+        Fetch workflow name based on incident number.
+        
+        1. Query the database to get the incident category name
+        2. Convert the incident category name to a workflow name
+        
+        Args:
+            incident_number (int): The primary key of the incident log
+        
+        Returns:
+            str: Workflow name derived from incident category
+            None: If no incident is found
+        """
+        try:
+            # Construct the SQL query to fetch incident category
+            query = text("""
+                SELECT 
+                    incName_TXT, 
+                    inlCategory_FRk,
+                    IncidentLog_PRK
+                FROM 
+                    [dbo].IncidentCategory_TBL
+                INNER JOIN 
+                    [dbo].IncidentLog_TBL 
+                ON 
+                    IncidentCategory_TBL.IncidentCategory_PRK = IncidentLog_TBL.inlCategory_FRK
+                WHERE 
+                    IncidentLog_TBL.IncidentLog_PRK = :incident_number
+            """)
+            
+            # Execute the query
+            result = self.db.execute(query, {"incident_number": incident_number}).fetchone()
+            
+            if result:
+                # Convert incident category name to workflow name
+                # Remove extra spaces and replace spaces with underscores
+                workflow_name = '_'.join(result.incName_TXT.split())
+                
+                return workflow_name
+            else:
+                return None
+        
+        except Exception as e:
+            logger.error(f"Error fetching workflow name from incident category: {str(e)}")
+            print(f"Error fetching workflow name for incident {incident_number}: {e}")
+            return None
     

@@ -305,6 +305,27 @@ def setup_workflow_api(app, wf_builder_service, question_management_service, vc_
             return jsonify({"exists": exists}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+        
+    @workflow_api.route('/incident/category', methods=['GET'])
+    def get_incident_category():
+        try:
+            incident_number = request.args.get("incident_number")
+            
+            if not incident_number:
+                return jsonify({"error": "Incident number is required"}), 400
+            
+            # Use the method from wf_builder_service to get workflow name
+            workflow_name = vc_service.get_workflow_name_by_incident(incident_number)
+            
+            if workflow_name:
+                return jsonify({
+                    "workflow_name": workflow_name
+                }), 200
+            else:
+                return jsonify({"error": "No workflow found for this incident"}), 404
+        
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
         
 
