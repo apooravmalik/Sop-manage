@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { ThemeProvider } from "./components/ThemeContext";
 import WorkflowBuilder from "./pages/WorkflowBuilder";
 import WorkflowCollection from "./pages/WorkflowCollection";
@@ -13,6 +14,7 @@ import {
   Route,
   useLocation,
   useNavigate,
+  useParams
 } from "react-router-dom";
 // import { useTheme } from "./components/ThemeContext";
 import PropTypes from "prop-types";
@@ -83,10 +85,9 @@ Layout.propTypes = {
   children: PropTypes.node.isRequired,
 };
 
-const WorkflowModalWrapper = ({ children }) => {
+const IncidentNumberHandler = () => {
+  const { incident_number } = useParams();
   const navigate = useNavigate();
-  const [incidentNumber, setIncidentNumber] = useState("");
-  const [showModal, setShowModal] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
   // Fetch workflow_id after getting workflow_name
@@ -122,85 +123,64 @@ const WorkflowModalWrapper = ({ children }) => {
     }
   };
 
-  // Handle incident submission
-  const handleSubmit = async () => {
-    if (!incidentNumber.trim()) {
-      setErrorMessage("Incident number is required.");
-      return;
-    }
-
-    try {
-      console.log(`Fetching workflow name for incident ${incidentNumber}...`);
-
-      // Step 1: Fetch workflow_name using incident_number
-      const categoryResponse = await fetch(
-        `${config.API_BASE_URL}/api/incident/category?incident_number=${incidentNumber}`
-      );
-
-      const categoryData = await categoryResponse.json();
-
-      if (categoryResponse.ok && categoryData.workflow_name) {
-        const workflowName = categoryData.workflow_name;
-        console.log(`✅ Fetched workflow name: ${workflowName}`);
-
-        // Step 2: Fetch workflow_id using workflow_name
-        const workflowId = await getWorkflowId(workflowName);
-
-        if (workflowId) {
-          console.log(`✅ Workflow is ready. Navigating to SOP...`);
-          setShowModal(false);
-
-          // Step 3: Navigate to SOP page
-          navigate(`/workflow/${workflowName}/${incidentNumber}`);
-        }
-      } else {
-        setErrorMessage(
-          categoryData.error || "Failed to fetch workflow name. Please try again."
-        );
+  useEffect(() => {
+    const fetchWorkflowDetails = async () => {
+      if (!incident_number) {
+        setErrorMessage("No incident number provided");
+        return;
       }
-    } catch (error) {
-      setErrorMessage(
-        "An error occurred while fetching the workflow name. Please try again."
-      );
-      console.error("Error occurred:", error);
-    }
-  };
 
-  return (
-    <div>
-      {showModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-gray-800 text-white rounded-lg p-6 w-11/12 sm:w-1/3 md:w-1/4 shadow-lg">
-            <h2 className="text-xl font-semibold mb-4">
-              Enter Incident Number
-            </h2>
-            <input
-              type="text"
-              value={incidentNumber}
-              onChange={(e) => setIncidentNumber(e.target.value)}
-              placeholder="Enter incident number"
-              className="w-full px-4 py-2 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4 bg-black text-white"
-            />
-            {errorMessage && (
-              <p className="text-red-500 text-sm mb-4">{errorMessage}</p>
-            )}
-            {/* Remove workflowId check, allow direct submission */}
-            <button
-              onClick={handleSubmit}
-              className="w-full py-2 px-4 rounded-lg bg-blue-500 text-white hover:bg-blue-600"
-            >
-              Submit
-            </button>
-          </div>
+      try {
+        console.log(`Fetching workflow name for incident ${incident_number}...`);
+
+        // Step 1: Fetch workflow_name using incident_number
+        const categoryResponse = await fetch(
+          `${config.API_BASE_URL}/api/incident/category?incident_number=${incident_number}`
+        );
+
+        const categoryData = await categoryResponse.json();
+
+        if (categoryResponse.ok && categoryData.workflow_name) {
+          const workflowName = categoryData.workflow_name;
+          console.log(`Fetched workflow name: ${workflowName}`);
+
+          // Step 2: Fetch workflow_id using workflow_name
+          const workflowId = await getWorkflowId(workflowName);
+
+          if (workflowId) {
+            console.log(`Workflow is ready. Navigating to SOP...`);
+
+            // Step 3: Navigate to SOP page
+            navigate(`/workflow/${workflowName}/${incident_number}`);
+          }
+        } else {
+          setErrorMessage(
+            categoryData.error || "Failed to fetch workflow name. Please try again."
+          );
+        }
+      } catch (error) {
+        setErrorMessage(
+          "An error occurred while fetching the workflow name. Please try again."
+        );
+        console.error("Error occurred:", error);
+      }
+    };
+
+    fetchWorkflowDetails();
+  }, [incident_number, navigate]);
+
+  // Render error message if needed
+  if (errorMessage) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+        <div className="bg-gray-800 text-white rounded-lg p-6 w-11/12 sm:w-1/3 md:w-1/4 shadow-lg">
+          <p className="text-red-500 text-sm">{errorMessage}</p>
         </div>
-      )}
-      {!showModal && children}
-    </div>
-  );
-};
+      </div>
+    );
+  }
 
-WorkflowModalWrapper.propTypes = {
-  children: PropTypes.node.isRequired,
+  return null;
 };
 
 const App = () => {
@@ -209,29 +189,17 @@ const App = () => {
       <ThemeProvider>
         <Layout>
           <Routes>
-            <Route path="/" element={<WorkflowModalWrapper />} />
+            <Route path="/" element={<WorkflowCollection />} />
             <Route path="/workflow-list" element={<WorkflowList />} />
+            
+            {/* route to handle incident number */}
+            <Route path="/workflow/:incident_number" element={<IncidentNumberHandler />} />
+            
             <Route
-              path="/workflow-collection"
-              element={<WorkflowCollection />}
-            />
-            <Route
-              path="/workflow/:workflow_name"
-              element={
-                <WorkflowModalWrapper>
-                  <WorkflowQuiz />
-                </WorkflowModalWrapper>
-              }
+              path="/workflow/:workflow_name/:incident_number"
+              element={<WorkflowQuiz />}
             />
             <Route path="/builder" element={<WorkflowBuilder />} />
-            <Route
-              path="/workflow/:workflow_name/:incident_number"
-              element={<WorkflowQuiz />}
-            />
-            <Route
-              path="/workflow/:workflow_name/:incident_number"
-              element={<WorkflowQuiz />}
-            />
             <Route
               path="/workflow-view/:workflow_name"
               element={<WorkflowView />}
@@ -242,5 +210,6 @@ const App = () => {
     </BrowserRouter>
   );
 };
+
 
 export default App;
