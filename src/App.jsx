@@ -67,7 +67,7 @@ const Layout = ({ children }) => {
 
   return (
     <div
-      className={`min-h-screen ${isQuizPage ? "bg-black" : "pt-16 bg-black"}`}
+      className={`min-h-screen ${isQuizPage ? "bg-[#2e2e2e]" : "pt-16 bg-[#2e2e2e]"}`}
     >
       {/* Navbar has been removed */}
       <main

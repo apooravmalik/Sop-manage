@@ -665,12 +665,12 @@ const WorkflowQuiz = () => {
             ))}
           </div>
           <div className="max-w-2xl mx-auto mt-6 text-center">
-            <button
+            {/* <button
               onClick={() => navigate("/")}
               className="px-6 py-3 bg-blue-800 text-white rounded-lg hover:bg-blue-900 text-lg transition-colors"
             >
               Return Home
-            </button>
+            </button> */}
           </div>
         </div>
       </div>
@@ -839,12 +839,12 @@ const WorkflowQuiz = () => {
                   Submit Selected Option
                 </button>
 
-                <button
+                {/* <button
                   onClick={() => navigate("/")}
                   className="flex-1 px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-800"
                 >
                   Home
-                </button>
+                </button> */}
 
                 {!currentQuestion.is_required && (
                   <button
@@ -914,12 +914,12 @@ const WorkflowQuiz = () => {
                   Submit Selected Users
                 </button>
 
-                <button
+                {/* <button
                   onClick={() => navigate("/")}
                   className="flex-1 px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-800"
                 >
                   Home
-                </button>
+                </button> */}
 
                 {!currentQuestion.is_required && (
                   <button
@@ -956,12 +956,12 @@ const WorkflowQuiz = () => {
                   Submit Answer
                 </button>
 
-                <button
+                {/* <button
                   onClick={() => navigate("/")}
                   className="flex-1 px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-800"
                 >
                   Home
-                </button>
+                </button> */}
 
                 {!currentQuestion.is_required && (
                   <button
@@ -993,12 +993,12 @@ const WorkflowQuiz = () => {
               >
                 Confirm and Continue
               </button>
-              <button
+              {/* <button
                 onClick={() => navigate("/")}
                 className="flex-1 px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-800"
               >
                 Home
-              </button>
+              </button> */}
             </div>
           </div>
         );
@@ -1079,12 +1079,12 @@ const WorkflowQuiz = () => {
               <h3 className="text-xl font-semibold mb-4 text-white">
                 Workflow Complete!
               </h3>
-              <button
+              {/* <button
                 onClick={() => navigate(`/`)}
                 className="px-6 py-3 bg-blue-800 text-white rounded-lg hover:bg-blue-900 text-lg transition-colors"
               >
                 Return Home
-              </button>
+              </button> */}
             </CardContent>
           </Card>
         </div>

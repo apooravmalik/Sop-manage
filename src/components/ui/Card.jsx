@@ -4,7 +4,7 @@ import PropTypes from 'prop-types';
 export const Card = ({ className = '', children, ...props }) => {
   return (
     <div 
-      className={`rounded-lg bg-white dark:bg-gray-800 shadow-sm ${className}`} 
+      className={`rounded-lg bg-white dark:bg-[#2e2e2e] shadow-sm ${className}`} 
       {...props}
     >
       {children}
