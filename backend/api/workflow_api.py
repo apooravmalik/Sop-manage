@@ -16,9 +16,9 @@ def setup_workflow_api(app, wf_builder_service, question_management_service, vc_
         vc_service = VC_DB_Service(db_session=vc_db_session)
 
     @workflow_api.route('/workflows/get_id', methods=['POST'])
-    def get_workflow_id():
-        """Fetch workflow_id using workflow_name from request body."""
-        
+    def get_workflow_id_and_persons():
+        """Fetch workflow_id and associated person details using workflow_name."""
+
         print("API Hit: /api/workflows/get_id")
         data = request.get_json()
 
@@ -34,15 +34,35 @@ def setup_workflow_api(app, wf_builder_service, question_management_service, vc_
 
         print(f"Received workflow_name: {workflow_name}")
 
-        # Fetch workflow_id using the service function
+        # 1. Get workflow_id
         workflow_id = wf_builder_service.get_workflow_id_by_name(workflow_name)
-
         if workflow_id is None:
             print(f"No matching workflow found for: {workflow_name}")
             return jsonify({"error": "Workflow not found"}), 404
 
         print(f"Found workflow_id: {workflow_id}")
-        return jsonify({"workflow_id": workflow_id}), 200
+
+        # 2. Get incident_category_prk from workflow_name
+        incident_category_prk = vc_service.get_incident_category_prk_by_wf_name(workflow_name)
+        if incident_category_prk is None:
+            print(f"Incident category not found for workflow_name: {workflow_name}")
+            return jsonify({
+                "workflow_id": workflow_id,
+                "persons": [],
+                "warning": "Incident category not found"
+            }), 200
+
+        print(f"Found incident_category_prk: {incident_category_prk}")
+
+        # 3. Get persons by incident_category_prk
+        persons = vc_service.get_persons_by_incident_category(incident_category_prk)
+        print(f"Found {len(persons)} persons")
+
+        # Return combined result
+        return jsonify({
+            "workflow_id": workflow_id,
+            "persons": persons
+        }), 200
 
     @workflow_api.route('/workflows', methods=['POST'])
     def create_workflow():

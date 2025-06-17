@@ -14,6 +14,7 @@ const WorkflowQuiz = () => {
   const navigate = useNavigate();
   const [workflowId, setWorkflowId] = useState(null);
   const [questions, setQuestions] = useState([]);
+  const [persons, setPersons] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState({});
   const [loading, setLoading] = useState(true);
@@ -114,6 +115,15 @@ const WorkflowQuiz = () => {
       if (data.workflow_id) {
         console.log(`Fetched workflow_id: ${data.workflow_id}`);
         setWorkflowId(data.workflow_id);
+        
+        // Update persons state with the fetched person details
+        if (data.persons && data.persons.length > 0) {
+          console.log(`Fetched ${data.persons.length} persons`);
+          setPersons(data.persons);
+        } else {
+          console.log("No persons found for this workflow");
+          setPersons([]);
+        }
       } else {
         throw new Error("Workflow not found");
       }
@@ -273,6 +283,38 @@ const WorkflowQuiz = () => {
       setError("Both workflow ID and incident number are required");
     }
   }, [workflowId, incident_number, loadingWorkflowId]);
+
+
+  const renderPersonDetails = () => {
+    if (!persons || persons.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="max-w-2xl mx-auto mb-6">
+        <div className="bg-[#2e2e2e] border border-gray-600 rounded-lg p-4">
+          <h3 className="text-lg font-medium text-white mb-3">Key Personnel</h3>
+          <div className="space-y-3">
+            {persons.map((person, index) => (
+              <div key={person.person_prk || index} className="text-gray-300">
+                <div className="font-medium text-white">
+                  {person.prsFirstName_txt} {person.prsLastName_txt}
+                </div>
+                <div className="text-sm space-y-1">
+                  {person.prsMobileNum_txt && (
+                    <div>Mobile: {person.prsMobileNum_txt}</div>
+                  )}
+                  {person.prsEmailAddress_txt && (
+                    <div>Email: {person.prsEmailAddress_txt}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const advanceToNextQuestion = (nextQuestionId = null) => {
     console.log("Advancing to next question:", {
@@ -636,6 +678,7 @@ const WorkflowQuiz = () => {
           <div className="text-center text-2xl font-bold text-gray-300 mb-8">
             Workflow - Completed Workflow
           </div>
+          {renderPersonDetails()}
           <div className="space-y-6">
             {questions.map((question, index) => (
               <Card
@@ -1098,6 +1141,7 @@ const WorkflowQuiz = () => {
         <div className="text-center text-2xl font-bold text-gray-300 mb-8">
           Workflow - Incident Number {incident_number}
         </div>
+        {renderPersonDetails()}
         <div className="space-y-6">
           {questions.map((question, index) => {
             // Only show if it's completed or the current active question

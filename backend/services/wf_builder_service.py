@@ -460,8 +460,9 @@ class WorkflowBuilderService:
 
     
 class AnswerService:
-    def __init__(self, db_session: Session):
+    def __init__(self, db_session):
         self.db = db_session
+        self.vc_service = VC_DB_Service(db_session)
 
     def _get_workflow_id(self, question_id: int) -> int:
         """
@@ -522,19 +523,36 @@ class AnswerService:
     
     def update_incidentlog_details(self, incident_number: str, new_text: str, workflow_name: str):
         """
-        Append new text (question, answer, timestamp) to the inlIncidentDetails_MEM field in the IncidentLog_TBL.
+        Append new text (question, answer, timestamp) to the iinlActionTaken_MEM field in the IncidentLog_TBL.
+        With the person details of that current incident_Category (as of 18/06/25)
 
         Args:
             incident_number (str): The incident number to update.
-            new_text (str): The text to append to the inlIncidentDetails_MEM field.
+            new_text (str): The text to append to the iinlActionTaken_MEM field.
             workflow_name (str): The name of the workflow to include in the SOP heading.
 
+        Flow:
+            1. Use workflow_name to get incident_category_prk
+            2. Use incident_category_prk to get person details
+            3. Add to the static heading
+            4. Construct the SQL query to update iinlActionTaken_MEM
+        
         Returns:
             None
         """
+        incident_category_prk = self.vc_service.get_incident_category_prk_by_wf_name(workflow_name)
+        person_details = self.vc_service.get_persons_by_incident_category(incident_category_prk)
         try:
             # Dynamically format the heading with the workflow_name
             static_heading = f"======SOP - {workflow_name} ======"
+            
+            if person_details:
+                static_heading += "\n\nRelated Persons:\n"
+                for p in person_details:
+                    static_heading += (
+                        f"- {p['prsFirstName_txt']} {p['prsLastName_txt']} | "
+                        f"{p['prsEmailAddress_txt']} | Mobile: {p['prsMobileNum_txt']}\n"
+        )
 
             # Construct the SQL query to update iinlActionTaken_MEM
             query = text("""
@@ -782,4 +800,92 @@ class VC_DB_Service:
             logger.error(f"Error fetching workflow name from incident category: {str(e)}")
             print(f"Error fetching workflow name for incident {incident_number}: {e}")
             return None
+        
+        
+    def get_incident_category_prk_by_wf_name(self, workflow_name):
+        """
+        Reverse engineer workflow_name to get the corresponding IncidentCategory_PRK.
+
+        Args:
+            workflow_name (str): The name of the workflow (e.g., 'Fire_Alarm')
+
+        Returns:
+            int: IncidentCategory_PRK if found
+            None: If no matching record found
+        """
+        try:
+            # Reverse transformation: Replace underscores with spaces
+            incident_name = ' '.join(workflow_name.split('_'))
+
+            query = text("""
+                SELECT 
+                    IncidentCategory_PRK
+                FROM 
+                    [TEST].[dbo].IncidentCategory_TBL
+                WHERE 
+                    incName_TXT = :incident_name
+            """)
+
+            result = self.db.execute(query, {"incident_name": incident_name}).fetchone()
+
+            if result:
+                return result.IncidentCategory_PRK
+            else:
+                return None
+
+        except Exception as e:
+            logger.error(f"Error fetching IncidentCategory_PRK from workflow_name: {str(e)}")
+            print(f"Error fetching IncidentCategory_PRK from workflow_name {workflow_name}: {e}")
+            return None
+
+    def get_persons_by_incident_category(self, incident_category_id):
+        """
+        Fetch distinct person details for a given IncidentCategory_PRK.
+
+        Args:
+            incident_category_id (int): IncidentCategory_PRK
+
+        Returns:
+            list of dicts: Person details
+        """
+        try:
+            query = text("""
+                WITH AllData AS (
+                    SELECT  
+                        p.person_prk,
+                        p.prsFirstName_txt,
+                        p.prsLastName_txt,
+                        p.prsTelnum_txt,
+                        p.prsMobileNum_txt,
+                        p.prsEmailAddress_txt
+                    FROM [TEST].[dbo].Building_TBL   AS b
+                    LEFT JOIN  [TEST].[dbo].Device_TBL     AS d  ON d.dvcBuilding_FRK = b.Building_prk
+                    LEFT JOIN  [TEST].[dbo].NVR_TBL        AS n  ON n.nvrAlias_TXT = d.dvcName_txt
+                    LEFT JOIN  [TEST].[dbo].ProEvent_TBL   AS pe ON pe.pevBuilding_frk = b.Building_prk
+                    LEFT JOIN  [TEST].[dbo].BuildingKeyLink_TBL AS bk ON bk.bklbuilding_FRK = b.Building_PRK
+                    LEFT JOIN  [TEST].[dbo].Person_TBL     AS p  ON p.person_prk = bk.bklKeyHolder_FRK
+                    WHERE pe.pevIncidentCategory_frk = :incident_category_id
+                )
+                SELECT DISTINCT 
+                    person_prk,
+                    prsFirstName_txt,
+                    prsLastName_txt,
+                    prsTelnum_txt,
+                    prsMobileNum_txt,
+                    prsEmailAddress_txt
+                FROM AllData;
+            """)
+
+            result = self.db.execute(query, {"incident_category_id": incident_category_id}).fetchall()
+
+            if result:
+                return [dict(row._mapping) for row in result]
+            else:
+                return []
+
+        except Exception as e:
+            logger.error(f"Error fetching person details: {str(e)}")
+            print(f"Error: {e}")
+            return []
+
     
