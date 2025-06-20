@@ -521,7 +521,7 @@ class AnswerService:
             self.db.rollback()
             raise
     
-    def update_incidentlog_details(self, incident_number: str, new_text: str, workflow_name: str):
+    def update_incidentlog_details(self, incident_number: str, new_text: str, workflow_name: str, building_frk: str):
         """
         Append new text (question, answer, timestamp) to the iinlActionTaken_MEM field in the IncidentLog_TBL.
         With the person details of that current incident_Category (as of 18/06/25)
@@ -541,7 +541,7 @@ class AnswerService:
             None
         """
         incident_category_prk = self.vc_service.get_incident_category_prk_by_wf_name(workflow_name)
-        person_details = self.vc_service.get_persons_by_incident_category(incident_category_prk)
+        person_details = self.vc_service.get_persons_by_incident_category(incident_category_prk, building_frk)
         try:
             # Dynamically format the heading with the workflow_name
             static_heading = f"======SOP - {workflow_name} ======"
@@ -837,55 +837,88 @@ class VC_DB_Service:
             logger.error(f"Error fetching IncidentCategory_PRK from workflow_name: {str(e)}")
             print(f"Error fetching IncidentCategory_PRK from workflow_name {workflow_name}: {e}")
             return None
-
-    def get_persons_by_incident_category(self, incident_category_id):
+    
+    def get_building_frk_from_incident_number(self, incident_number):
         """
-        Fetch distinct person details for a given IncidentCategory_PRK.
+        Fetch the inlBuilding_FRK from IncidentLog_TBL using the given incident_number (IncidentLog_PRK).
 
         Args:
-            incident_category_id (int): IncidentCategory_PRK
+            incident_number (int): The primary key of the incident log.
 
         Returns:
-            list of dicts: Person details
+            int: Building_FRK if found
+            None: If not found
+        """
+        try:
+            query = text("""
+                SELECT inlBuilding_FRK
+                FROM [TEST].[dbo].IncidentLog_TBL
+                WHERE IncidentLog_PRK = :incident_number
+            """)
+
+            result = self.db.execute(query, {"incident_number": incident_number}).fetchone()
+
+            if result:
+                return result.inlBuilding_FRK
+            else:
+                return None
+
+        except Exception as e:
+            logger.error(f"Error fetching building_frk for incident_number {incident_number}: {str(e)}")
+            return None
+
+
+    def get_persons_by_incident_category(self, incident_category_prk, building_frk):
+        """
+        Fetch distinct person details using incident_category_prk and building_frk.
+
+        Args:
+            incident_category_prk (int): FK from IncidentCategory_TBL
+            building_frk (int): FK from IncidentLog_TBL (via building)
+
+        Returns:
+            list: List of person dictionaries
         """
         try:
             query = text("""
                 WITH AllData AS (
-                    SELECT  
+                    SELECT
                         p.person_prk,
                         p.prsFirstName_txt,
                         p.prsLastName_txt,
                         p.prsTelnum_txt,
                         p.prsMobileNum_txt,
-                        p.prsEmailAddress_txt
-                    FROM [TEST].[dbo].Building_TBL   AS b
-                    LEFT JOIN  [TEST].[dbo].Device_TBL     AS d  ON d.dvcBuilding_FRK = b.Building_prk
-                    LEFT JOIN  [TEST].[dbo].NVR_TBL        AS n  ON n.nvrAlias_TXT = d.dvcName_txt
-                    LEFT JOIN  [TEST].[dbo].ProEvent_TBL   AS pe ON pe.pevBuilding_frk = b.Building_prk
-                    LEFT JOIN  [TEST].[dbo].BuildingKeyLink_TBL AS bk ON bk.bklbuilding_FRK = b.Building_PRK
-                    LEFT JOIN  [TEST].[dbo].Person_TBL     AS p  ON p.person_prk = bk.bklKeyHolder_FRK
+                        p.prsEmailAddress_txt,
+                        bk.bklBuilding_FRK
+                    FROM [TEST].[dbo].Building_TBL AS b
+                    LEFT JOIN [TEST].[dbo].Device_TBL AS d ON d.dvcBuilding_FRK = b.Building_prk
+                    LEFT JOIN [TEST].[dbo].NVR_TBL AS n ON n.nvrAlias_TXT = d.dvcName_txt
+                    LEFT JOIN [TEST].[dbo].ProEvent_TBL AS pe ON pe.pevBuilding_frk = b.Building_prk
+                    LEFT JOIN [TEST].[dbo].BuildingKeyLink_TBL AS bk ON bk.bklbuilding_FRK = b.Building_PRK
+                    LEFT JOIN [TEST].[dbo].Person_TBL AS p ON p.person_prk = bk.bklKeyHolder_FRK
                     WHERE pe.pevIncidentCategory_frk = :incident_category_id
+                    AND bk.bklBuilding_FRK = :building_frk
                 )
-                SELECT DISTINCT 
+                SELECT DISTINCT
                     person_prk,
                     prsFirstName_txt,
                     prsLastName_txt,
                     prsTelnum_txt,
                     prsMobileNum_txt,
-                    prsEmailAddress_txt
-                FROM AllData;
+                    prsEmailAddress_txt,
+                    bklBuilding_FRK
+                FROM AllData
             """)
 
-            result = self.db.execute(query, {"incident_category_id": incident_category_id}).fetchall()
+            results = self.db.execute(query, {
+                "incident_category_id": incident_category_prk,
+                "building_frk": building_frk
+            }).fetchall()
 
-            if result:
-                return [dict(row._mapping) for row in result]
-            else:
-                return []
+            return [dict(row._mapping) for row in results]
 
         except Exception as e:
-            logger.error(f"Error fetching person details: {str(e)}")
-            print(f"Error: {e}")
+            logger.error(f"Error fetching persons for incident_category_prk={incident_category_prk} and building_frk={building_frk}: {str(e)}")
             return []
 
     

@@ -17,7 +17,7 @@ def setup_workflow_api(app, wf_builder_service, question_management_service, vc_
 
     @workflow_api.route('/workflows/get_id', methods=['POST'])
     def get_workflow_id_and_persons():
-        """Fetch workflow_id and associated person details using workflow_name."""
+        """Fetch workflow_id and associated person details using workflow_name (incident_number optional)."""
 
         print("API Hit: /api/workflows/get_id")
         data = request.get_json()
@@ -26,13 +26,16 @@ def setup_workflow_api(app, wf_builder_service, question_management_service, vc_
             print("No data received or invalid JSON")
             return jsonify({"error": "Invalid or missing JSON"}), 400
 
-        # Check if 'workflow_name' is provided in the request body
         workflow_name = data.get("workflow_name")
+        incident_number = data.get("incident_number")  # optional
+
         if not workflow_name:
             print("workflow_name is missing from request body")
             return jsonify({"error": "workflow_name is required"}), 400
 
         print(f"Received workflow_name: {workflow_name}")
+        if incident_number:
+            print(f"Received incident_number: {incident_number}")
 
         # 1. Get workflow_id
         workflow_id = wf_builder_service.get_workflow_id_by_name(workflow_name)
@@ -42,7 +45,7 @@ def setup_workflow_api(app, wf_builder_service, question_management_service, vc_
 
         print(f"Found workflow_id: {workflow_id}")
 
-        # 2. Get incident_category_prk from workflow_name
+        # 2. Get incident_category_prk
         incident_category_prk = vc_service.get_incident_category_prk_by_wf_name(workflow_name)
         if incident_category_prk is None:
             print(f"Incident category not found for workflow_name: {workflow_name}")
@@ -54,14 +57,23 @@ def setup_workflow_api(app, wf_builder_service, question_management_service, vc_
 
         print(f"Found incident_category_prk: {incident_category_prk}")
 
-        # 3. Get persons by incident_category_prk
-        persons = vc_service.get_persons_by_incident_category(incident_category_prk)
+        # 3. Get building_frk only if incident_number is given
+        building_frk = None
+        if incident_number:
+            building_frk = vc_service.get_building_frk_from_incident_number(incident_number)
+            if building_frk is None:
+                print(f"Building not found for incident_number: {incident_number}")
+            else:
+                print(f"Found building_frk: {building_frk}")
+
+        # 4. Get persons
+        persons = vc_service.get_persons_by_incident_category(incident_category_prk, building_frk)
         print(f"Found {len(persons)} persons")
 
-        # Return combined result
         return jsonify({
             "workflow_id": workflow_id,
-            "persons": persons
+            "persons": persons,
+            "building_frk": building_frk
         }), 200
 
     @workflow_api.route('/workflows', methods=['POST'])
@@ -166,6 +178,7 @@ def setup_workflow_api(app, wf_builder_service, question_management_service, vc_
             incident_number = data.get("incident_number")
             workflow_id = data.get("workflow_id")
             frontend_timestamp = data.get("timestamp")
+            building_frk = data.get("building_frk")
 
             if not all([question_id, answer_text, incident_number, workflow_id]):
                 return jsonify({
@@ -227,7 +240,8 @@ def setup_workflow_api(app, wf_builder_service, question_management_service, vc_
             answer_service.update_incidentlog_details(
                 incident_number=incident_number,
                 new_text=formatted_text,
-                workflow_name=workflow_name
+                workflow_name=workflow_name,
+                building_frk=building_frk
             )
             # Check if the current question is the last one
             is_last_question = question_management_service.is_last_question(question_id)

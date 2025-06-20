@@ -28,6 +28,7 @@ const WorkflowQuiz = () => {
   const [loadingWorkflowId, setLoadingWorkflowId] = useState(true);
   const [lastFilledQuestionId, setLastFilledQuestionId] = useState(null);
   const forceNavigationRef = useRef(null);
+  const buildingFrkRef = useRef(null);
 
   // Function to create a storage key based on workflow and incident
   const getStorageKey = useCallback(() => {
@@ -103,7 +104,7 @@ const WorkflowQuiz = () => {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ workflow_name }),
+          body: JSON.stringify({ workflow_name, incident_number }),
         }
       );
 
@@ -115,6 +116,11 @@ const WorkflowQuiz = () => {
       if (data.workflow_id) {
         console.log(`Fetched workflow_id: ${data.workflow_id}`);
         setWorkflowId(data.workflow_id);
+
+        if (data.building_frk) {
+        buildingFrkRef.current = data.building_frk // storing building_frk to use it in submission payload of answer submission API
+        console.log(`Fetched building_frk: ${data.building_frk}`);
+      }
         
         // Update persons state with the fetched person details
         if (data.persons && data.persons.length > 0) {
@@ -134,7 +140,7 @@ const WorkflowQuiz = () => {
     } finally {
       setLoadingWorkflowId(false);
     }
-  }, [workflow_name]);
+  }, [workflow_name, incident_number]);
 
   const fetchPreviousResponses = useCallback(
     async (id) => {
@@ -495,6 +501,7 @@ const WorkflowQuiz = () => {
         incident_number: incident_number,
         workflow_id: workflowId,
         timestamp: timestamp, // Include timestamp in submission payload
+        building_frk: buildingFrkRef.current
       };
 
       console.log("Submission Payload:", submissionPayload);
